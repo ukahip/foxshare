@@ -1,6 +1,6 @@
 {
   "functions": {
-    "api/cognito.js": { "memory": 128, "maxDuration": 10 },
-    "api/files.js":   { "memory": 128, "maxDuration": 10 }
+    "api/cognito.js": { "maxDuration": 10 },
+    "api/files.js":   { "maxDuration": 10 }
   }
 }
