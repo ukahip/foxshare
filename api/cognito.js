@@ -10,26 +10,38 @@ module.exports = async function (req, res) {
 
   var POOL_ID   = (process.env.POOL_ID   || "").trim();
   var CLIENT_ID = (process.env.CLIENT_ID || "").trim();
-  var region    = POOL_ID.split("_")[0];
+
+  if (!POOL_ID || !CLIENT_ID) {
+    res.status(500).json({ error: "Missing env vars", POOL_ID_set: !!POOL_ID, CLIENT_ID_set: !!CLIENT_ID });
+    return;
+  }
+
+  var region = POOL_ID.split("_")[0];
 
   var parsed = req.body;
   if (typeof parsed === "string") {
     try { parsed = JSON.parse(parsed); } catch(e) {}
   }
 
-  var target = parsed.target;
-  var body   = parsed.body || {};
+  var target    = parsed.target;
+  var body      = parsed.body || {};
   body.ClientId = CLIENT_ID;
 
-  // Return debug snapshot BEFORE sending to Cognito
-  return res.status(200).json({
-    debug: true,
-    CLIENT_ID_length: CLIENT_ID.length,
-    CLIENT_ID_first4: CLIENT_ID.substring(0, 4),
-    CLIENT_ID_last4:  CLIENT_ID.substring(CLIENT_ID.length - 4),
-    POOL_ID_length:   POOL_ID.length,
-    target:           target,
-    body_keys:        Object.keys(body),
-    ClientId_in_body: body.ClientId,
-  });
+  try {
+    var response = await fetch(
+      "https://cognito-idp." + region + ".amazonaws.com/",
+      {
+        method:  "POST",
+        headers: {
+          "Content-Type":  "application/x-amz-json-1.1",
+          "X-Amz-Target":  target,
+        },
+        body: JSON.stringify(body),
+      }
+    );
+    var data = await response.json();
+    res.status(response.status).json(data);
+  } catch(e) {
+    res.status(500).json({ error: "Fetch failed: " + e.message });
+  }
 };
