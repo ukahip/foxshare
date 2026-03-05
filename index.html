@@ -85,6 +85,10 @@ input::placeholder { color: var(--muted); }
 .mfa-title { font-size: 13px; font-weight: 600; color: white; margin-bottom: 4px; }
 .mfa-sub { font-size: 11px; color: var(--label); margin-bottom: 16px; font-family: 'Space Mono', monospace; }
 .share-box { background: var(--bg); border: 1px solid rgba(0,212,255,0.15); border-radius: 8px; padding: 12px 14px; font-family: 'Space Mono', monospace; font-size: 10px; color: var(--accent); word-break: break-all; line-height: 1.7; margin-top: 10px; display: none; }
+.auth-toggle { text-align:center; margin-top:14px; font-size:12px; color:var(--label); font-family:'Space Mono',monospace; }
+.auth-toggle a { color:var(--accent); cursor:pointer; text-decoration:underline; }
+.verify-box { display:none; }
+.verify-box.show { display:block; }
 .share-box.show { display: flex; gap: 8px; align-items: flex-start; }
 .share-url { flex: 1; }
 .files-list { display: flex; flex-direction: column; gap: 8px; margin-top: 14px; }
@@ -131,7 +135,7 @@ input::placeholder { color: var(--muted); }
 
   <div class="status">
     <div class="dot" id="dot"></div>
-    <span id="statusMsg">Ready — login below to get started</span>
+    <span id="statusMsg">Ready — login or sign up to get started</span>
   </div>
 
   <!-- STEP 1 -->
@@ -156,6 +160,47 @@ input::placeholder { color: var(--muted); }
           </div>
         </div>
         <button class="btn btn-primary" id="loginBtn" onclick="login()">Login</button>
+        <div class="auth-toggle">Don't have an account? <a onclick="showSignup()">Sign Up</a></div>
+      </div>
+
+      <!-- SIGN UP FORM -->
+      <div id="signupForm" style="display:none;">
+        <div class="grid2">
+          <div class="field">
+            <label>Email</label>
+            <input type="email" id="signupEmail" placeholder="you@example.com"/>
+          </div>
+          <div class="field">
+            <label>Password</label>
+            <input type="password" id="signupPassword" placeholder="Min 8 chars, 1 number, 1 symbol"/>
+          </div>
+        </div>
+        <div class="grid1">
+          <div class="field">
+            <label>Confirm Password</label>
+            <input type="password" id="signupConfirm" placeholder="Re-enter password"/>
+          </div>
+        </div>
+        <button class="btn btn-primary" id="signupBtn" onclick="signUp()">Create Account</button>
+        <div class="auth-toggle">Already have an account? <a onclick="showLogin()">Login</a></div>
+        <div class="resp" id="signupResp"></div>
+      </div>
+
+      <!-- EMAIL VERIFICATION BOX -->
+      <div id="verifyBox" class="scan-box" style="display:none;">
+        <div class="scan-title">📧 Verify Your Email</div>
+        <div class="scan-steps">A verification code has been sent to your email address. Enter it below to activate your account.</div>
+        <div class="grid1" style="margin-top:12px;">
+          <div class="field">
+            <label>Verification Code</label>
+            <input type="text" id="verifyCode" placeholder="Enter 6-digit code" inputmode="numeric" maxlength="6"/>
+          </div>
+        </div>
+        <button class="btn btn-primary" onclick="verifyEmail()">Verify Email</button>
+        <div style="margin-top:10px;text-align:center;">
+          <span class="auth-toggle"><a onclick="resendCode()">Resend verification code</a></span>
+        </div>
+        <div class="resp" id="verifyResp"></div>
       </div>
 
       <div class="scan-box" id="newPwdBox">
@@ -306,6 +351,71 @@ async function cognitoCall(target, body) {
   const data = await res.json();
   if (!res.ok) throw data;
   return data;
+}
+function showSignup() {
+  document.getElementById('loginForm').style.display = 'none';
+  document.getElementById('signupForm').style.display = 'block';
+  document.getElementById('verifyBox').style.display = 'none';
+  resp('loginResp','','');
+}
+function showLogin() {
+  document.getElementById('loginForm').style.display = 'block';
+  document.getElementById('signupForm').style.display = 'none';
+  document.getElementById('verifyBox').style.display = 'none';
+  resp('loginResp','','');
+}
+async function signUp() {
+  const email   = document.getElementById('signupEmail').value.trim();
+  const pwd     = document.getElementById('signupPassword').value;
+  const confirm = document.getElementById('signupConfirm').value;
+  if (!email || !pwd) { resp('signupResp','⚠ Please fill in all fields.','warn'); return; }
+  if (pwd !== confirm) { resp('signupResp','⚠ Passwords do not match.','warn'); return; }
+  if (pwd.length < 8)  { resp('signupResp','⚠ Password must be at least 8 characters.','warn'); return; }
+  const btn = document.getElementById('signupBtn');
+  btn.innerHTML = '<span class="spin"></span>Creating account...'; btn.disabled = true;
+  try {
+    await cognitoCall('AWSCognitoIdentityProviderService.SignUp', {
+      Username: email,
+      Password: pwd,
+      UserAttributes: [{ Name: 'email', Value: email }]
+    });
+    S.email = email;
+    document.getElementById('signupForm').style.display = 'none';
+    document.getElementById('verifyBox').style.display = 'block';
+    resp('signupResp','','');
+    setStatus('Check your email for a verification code','warn');
+  } catch(e) {
+    resp('signupResp','❌ Sign up failed: '+(e.message||JSON.stringify(e)),'err');
+  }
+  btn.innerHTML = 'Create Account'; btn.disabled = false;
+}
+async function verifyEmail() {
+  const code = document.getElementById('verifyCode').value.trim();
+  if (!code) { resp('verifyResp','⚠ Enter the verification code.','warn'); return; }
+  try {
+    await cognitoCall('AWSCognitoIdentityProviderService.ConfirmSignUp', {
+      Username: S.email,
+      ConfirmationCode: code
+    });
+    document.getElementById('verifyBox').style.display = 'none';
+    showLogin();
+    document.getElementById('email').value = S.email;
+    resp('loginResp','✅ Email verified! You can now log in.','ok');
+    setStatus('Email verified — login below','on');
+  } catch(e) {
+    resp('verifyResp','❌ Verification failed: '+(e.message||JSON.stringify(e)),'err');
+  }
+}
+async function resendCode() {
+  if (!S.email) { resp('verifyResp','⚠ Email not found — please sign up again.','warn'); return; }
+  try {
+    await cognitoCall('AWSCognitoIdentityProviderService.ResendConfirmationCode', {
+      Username: S.email
+    });
+    resp('verifyResp','✅ Code resent — check your email.','ok');
+  } catch(e) {
+    resp('verifyResp','❌ Error: '+(e.message||JSON.stringify(e)),'err');
+  }
 }
 async function login() {
   S.email = document.getElementById('email').value.trim();
