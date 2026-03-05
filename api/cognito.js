@@ -8,17 +8,17 @@ module.exports = async function (req, res) {
     return;
   }
 
-  var POOL_ID   = process.env.POOL_ID   || null;
-  var CLIENT_ID = process.env.CLIENT_ID || null;
+  var POOL_ID   = (process.env.POOL_ID   || "").trim();
+  var CLIENT_ID = (process.env.CLIENT_ID || "").trim();
 
-  // Debug — shows exactly what env vars are visible
+  // Always return debug info so we can see what's happening
   if (!CLIENT_ID || !POOL_ID) {
     res.status(500).json({
       error: "Missing environment variables",
-      POOL_ID_set:   !!POOL_ID,
-      CLIENT_ID_set: !!CLIENT_ID,
-      POOL_ID_value:   POOL_ID   ? POOL_ID.substring(0,8)+'...' : 'NULL',
-      CLIENT_ID_value: CLIENT_ID ? CLIENT_ID.substring(0,4)+'...' : 'NULL'
+      POOL_ID_length:   POOL_ID.length,
+      CLIENT_ID_length: CLIENT_ID.length,
+      POOL_ID_preview:   POOL_ID.length   > 0 ? POOL_ID.substring(0,8)   + "..." : "EMPTY",
+      CLIENT_ID_preview: CLIENT_ID.length > 0 ? CLIENT_ID.substring(0,4) + "..." : "EMPTY"
     });
     return;
   }
@@ -28,27 +28,36 @@ module.exports = async function (req, res) {
   var parsed = req.body;
   if (typeof parsed === "string") {
     try { parsed = JSON.parse(parsed); } catch(e) {
-      res.status(400).json({ error: "Invalid JSON body" });
+      res.status(400).json({ error: "Invalid JSON: " + e.message });
       return;
     }
+  }
+
+  if (!parsed || !parsed.target) {
+    res.status(400).json({ error: "Missing target in request body", received: JSON.stringify(parsed) });
+    return;
   }
 
   var target  = parsed.target;
   var body    = parsed.body || {};
   body.ClientId = CLIENT_ID;
 
-  var response = await fetch(
-    "https://cognito-idp." + region + ".amazonaws.com/",
-    {
-      method: "POST",
-      headers: {
-        "Content-Type":  "application/x-amz-json-1.1",
-        "X-Amz-Target":  target,
-      },
-      body: JSON.stringify(body),
-    }
-  );
+  try {
+    var response = await fetch(
+      "https://cognito-idp." + region + ".amazonaws.com/",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type":  "application/x-amz-json-1.1",
+          "X-Amz-Target":  target,
+        },
+        body: JSON.stringify(body),
+      }
+    );
 
-  var data = await response.json();
-  res.status(response.status).json(data);
+    var data = await response.json();
+    res.status(response.status).json(data);
+  } catch(e) {
+    res.status(500).json({ error: "Fetch failed: " + e.message });
+  }
 };
