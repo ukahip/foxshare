@@ -486,19 +486,33 @@ async function downloadFile(key,name) {
 }
 async function shareFile(key) {
   if(!S.token){alert('Login first.');return;}
+  const box=document.getElementById('shareBox');
+  const urlEl=document.getElementById('shareUrl');
+  urlEl.textContent='⏳ Generating short link...';
+  box.classList.add('show');
   try {
-    const res=await fetch(S.apiUrl+'/files/share?s3_key='+encodeURIComponent(key),{method:'GET',mode:'cors',headers:{'Authorization':S.token}});
+    const res=await fetch('/api/files?path=/files/share&qs=s3_key='+encodeURIComponent(key),{method:'GET',headers:{'Authorization':S.token}});
     const data=await res.json();
     if(res.ok){
-      const box=document.getElementById('shareBox');
-      document.getElementById('shareUrl').textContent='🔗 Share URL (expires in '+data.expires_in_minutes+' mins):\n'+data.share_url;
-      box.classList.add('show'); box.scrollIntoView({behavior:'smooth',block:'nearest'});
-    } else{alert('Share failed: '+(data.error||'Unknown'));}
-  } catch(e){alert('Error: '+e.message);}
+      const longUrl=data.share_url;
+      const expires=data.expires_in_minutes;
+      try {
+        const tiny=await fetch('https://tinyurl.com/api-create.php?url='+encodeURIComponent(longUrl));
+        const shortUrl=await tiny.text();
+        urlEl.innerHTML='🔗 <strong>Short link</strong> (expires in '+expires+' mins):<br><span id="shortUrlText">'+shortUrl+'</span>';
+      } catch(e) {
+        urlEl.innerHTML='🔗 Share URL (expires in '+expires+' mins):<br><span id="shortUrlText">'+longUrl+'</span>';
+      }
+      box.scrollIntoView({behavior:'smooth',block:'nearest'});
+    } else{urlEl.textContent='Share failed: '+(data.error||'Unknown');}
+  } catch(e){urlEl.textContent='Error: '+e.message;}
 }
 function copyShare() {
-  const url=document.getElementById('shareUrl').textContent.split('\n')[1];
+  const el=document.getElementById('shortUrlText');
+  const url=el?el.textContent:document.getElementById('shareUrl').textContent;
   navigator.clipboard.writeText(url);
+  const btn=document.querySelector('.share-box .btn-share');
+  if(btn){btn.textContent='Copied!';setTimeout(()=>{btn.textContent='Copy';},2000);}
 }
 async function deleteFile(key) {
   if(!S.token){alert('Login first.');return;}
