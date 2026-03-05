@@ -318,9 +318,6 @@ input::placeholder { color: var(--muted); }
 
 <script>
 const S = {
-  apiUrl:   'https://dd2ho8qedi.execute-api.us-east-1.amazonaws.com/Prod',
-  poolId:   'us-east-1_R38TzgYYW',
-  clientId: '7rjfp6u2le126fh0ku51g3cdos',
   token:'', session:'', email:'', mfaSession:'', setupSession:''
 };
 
@@ -342,11 +339,10 @@ function resp(id, msg, type) {
   el.className = 'resp show '+(type||'');
 }
 async function cognitoCall(target, body) {
-  const region = S.poolId.split('_')[0];
-  const res = await fetch(`https://cognito-idp.${region}.amazonaws.com/`, {
-    method:'POST', mode:'cors',
-    headers:{'Content-Type':'application/x-amz-json-1.1','X-Amz-Target':target},
-    body:JSON.stringify(body)
+  const res = await fetch('/api/cognito', {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({ target, body })
   });
   const data = await res.json();
   if (!res.ok) throw data;
@@ -420,12 +416,12 @@ async function resendCode() {
 async function login() {
   S.email = document.getElementById('email').value.trim();
   const pwd = document.getElementById('password').value;
-  if (!S.clientId) { resp('loginResp','⚠ Configuration error — please refresh the page.','warn'); return; }
+  
   const btn = document.getElementById('loginBtn');
   btn.innerHTML = '<span class="spin"></span>Logging in...'; btn.disabled = true;
   try {
     const data = await cognitoCall('AWSCognitoIdentityProviderService.InitiateAuth',
-      {AuthFlow:'USER_PASSWORD_AUTH',AuthParameters:{USERNAME:S.email,PASSWORD:pwd},ClientId:S.clientId});
+      {AuthFlow:'USER_PASSWORD_AUTH',AuthParameters:{USERNAME:S.email,PASSWORD:pwd}});
     handleAuthResponse(data);
   } catch(e) { resp('loginResp','❌ Login failed: '+(e.message||JSON.stringify(e)),'err'); setStatus('Login failed','err'); }
   btn.innerHTML='Login'; btn.disabled=false;
@@ -453,7 +449,7 @@ async function setPwd() {
   if (!np||!S.session) { resp('loginResp','⚠ Enter a new password.','warn'); return; }
   try {
     const data = await cognitoCall('AWSCognitoIdentityProviderService.RespondToAuthChallenge',
-      {ChallengeName:'NEW_PASSWORD_REQUIRED',ChallengeResponses:{USERNAME:S.email,NEW_PASSWORD:np},ClientId:S.clientId,Session:S.session});
+      {ChallengeName:'NEW_PASSWORD_REQUIRED',ChallengeResponses:{USERNAME:S.email,NEW_PASSWORD:np},Session:S.session});
     handleAuthResponse(data);
   } catch(e) { resp('loginResp','❌ Error: '+(e.message||JSON.stringify(e)),'err'); }
 }
@@ -494,7 +490,7 @@ async function submitMFA() {
   btn.innerHTML='<span class="spin"></span>Verifying...'; btn.disabled=true;
   try {
     const data = await cognitoCall('AWSCognitoIdentityProviderService.RespondToAuthChallenge',
-      {ChallengeName:'SOFTWARE_TOKEN_MFA',ChallengeResponses:{USERNAME:S.email,SOFTWARE_TOKEN_MFA_CODE:code},ClientId:S.clientId,Session:S.mfaSession});
+      {ChallengeName:'SOFTWARE_TOKEN_MFA',ChallengeResponses:{USERNAME:S.email,SOFTWARE_TOKEN_MFA_CODE:code},Session:S.mfaSession});
     if (data.AuthenticationResult) { loginSuccess(data.AuthenticationResult.IdToken); }
     else { resp('loginResp','❌ MFA verification failed.','err'); }
   } catch(e) {
@@ -553,7 +549,7 @@ async function uploadFile() {
   btn.innerHTML='<span class="spin"></span>Encrypting & Uploading...'; btn.disabled=true;
   try {
     const b64=await new Promise((res,rej)=>{const r=new FileReader();r.onload=e=>res(e.target.result.split(',')[1]);r.onerror=rej;r.readAsDataURL(file);});
-    const res=await fetch(S.apiUrl+'/files',{method:'POST',mode:'cors',headers:{'Authorization':S.token,'Content-Type':'application/json'},body:JSON.stringify({file_name:file.name,file_content:b64})});
+    const res=await fetch('/api/files?path=/files',{method:'POST',headers:{'Authorization':S.token,'Content-Type':'application/json'},body:JSON.stringify({file_name:file.name,file_content:b64})});
     const data=await res.json();
     if(res.ok){resp('upResp','✅ File uploaded & encrypted!\n\nFile: '+file.name+'\nFile ID: '+data.file_id+'\nS3 Key: '+data.s3_key+'\n\n🔐 Encrypted with KMS before writing to S3','ok');openSection('files');}
     else{resp('upResp','❌ Upload failed:\n'+JSON.stringify(data,null,2),'err');}
@@ -565,7 +561,7 @@ async function listFiles() {
   const btn=document.getElementById('listBtn');
   btn.innerHTML='<span class="spin"></span>Fetching your files...'; btn.disabled=true;
   try {
-    const res=await fetch(S.apiUrl+'/files',{method:'GET',mode:'cors',headers:{'Authorization':S.token}});
+    const res=await fetch('/api/files?path=/files',{method:'GET',headers:{'Authorization':S.token}});
     const data=await res.json();
     if(res.ok){
       const files=data.files||[];
@@ -585,7 +581,7 @@ async function listFiles() {
 async function downloadFile(key,name) {
   if(!S.token){alert('Login first.');return;}
   try {
-    const res=await fetch(S.apiUrl+'/files/download?s3_key='+encodeURIComponent(key),{method:'GET',mode:'cors',headers:{'Authorization':S.token}});
+    const res=await fetch('/api/files?path=/files/download&qs=s3_key='+encodeURIComponent(key),{method:'GET',headers:{'Authorization':S.token}});
     if(res.ok){
       const b64=await res.text(); const bytes=atob(b64); const arr=new Uint8Array(bytes.length);
       for(let i=0;i<bytes.length;i++)arr[i]=bytes.charCodeAt(i);
@@ -628,7 +624,7 @@ async function deleteFile(key) {
   if(!S.token){alert('Login first.');return;}
   if(!confirm('Permanently delete this file?'))return;
   try {
-    const res=await fetch(S.apiUrl+'/files/delete?s3_key='+encodeURIComponent(key),{method:'DELETE',mode:'cors',headers:{'Authorization':S.token}});
+    const res=await fetch('/api/files?path=/files/delete&qs=s3_key='+encodeURIComponent(key),{method:'DELETE',headers:{'Authorization':S.token}});
     const data=await res.json();
     if(res.ok){listFiles();}else{alert('Delete failed: '+(data.error||'Unknown'));}
   } catch(e){alert('Error: '+e.message);}
