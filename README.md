@@ -145,16 +145,6 @@ Click **Deploy** — your live URL will be ready in 30–60 seconds.
 - Rotate KMS key annually — enable auto rotation in KMS settings
 - Run OWASP ZAP scan against your Vercel URL periodically
 
----
-
-
-| File | Use for | Credentials |
-|---|---|---|
-| `index.html` | Vercel deployment | ❌ None |
-| `index-local.html` | Local testing only | ✅ Hardcoded |
-
----
-
 ## 🛠️ Troubleshooting
 
 | Error | Cause | Fix |
