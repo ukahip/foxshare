@@ -152,7 +152,7 @@ input::placeholder { color: var(--muted); }
         <div class="grid2">
           <div class="field">
             <label>Email</label>
-            <input type="email" id="email" placeholder="jadefox02@gmail.com"/>
+            <input type="email" id="email" placeholder="Username@xxx.com"/>
           </div>
           <div class="field">
             <label>Password</label>
@@ -160,7 +160,7 @@ input::placeholder { color: var(--muted); }
           </div>
         </div>
         <button class="btn btn-primary" id="loginBtn" onclick="login()">Login</button>
-        <div class="auth-toggle">Don't have an account? <a onclick="showSignup()">Sign Up</a></div>
+        <div class="auth-toggle">Don't have an account? <a onclick="showSignup()">Sign Up</a> · <a onclick="showForgot()">Forgot Password?</a></div>
       </div>
 
       <!-- SIGN UP FORM -->
@@ -184,6 +184,41 @@ input::placeholder { color: var(--muted); }
         <button class="btn btn-primary" id="signupBtn" onclick="signUp()">Create Account</button>
         <div class="auth-toggle">Already have an account? <a onclick="showLogin()">Login</a></div>
         <div class="resp" id="signupResp"></div>
+      </div>
+
+      <!-- FORGOT PASSWORD BOX -->
+      <div id="forgotBox" style="display:none;">
+        <div class="grid1">
+          <div class="field">
+            <label>Enter your email to reset your password</label>
+            <input type="email" id="forgotEmail" placeholder="you@example.com"/>
+          </div>
+        </div>
+        <button class="btn btn-primary" id="forgotBtn" onclick="forgotPassword()">Send Reset Code</button>
+        <div class="auth-toggle">Remember your password? <a onclick="showLogin()">Login</a></div>
+        <div class="resp" id="forgotResp"></div>
+      </div>
+
+      <!-- FORGOT PASSWORD RESET BOX -->
+      <div id="resetBox" style="display:none;">
+        <div class="scan-title">🔑 Reset Your Password</div>
+        <div class="scan-steps">Enter the 6-digit code sent to your email and choose a new password.</div>
+        <div class="grid1" style="margin-top:12px;">
+          <div class="field">
+            <label>Reset Code</label>
+            <input type="text" id="resetCode" placeholder="Enter 6-digit code" inputmode="numeric" maxlength="6"/>
+          </div>
+          <div class="field">
+            <label>New Password</label>
+            <input type="password" id="resetPwd" placeholder="Min 8 chars, 1 number, 1 symbol"/>
+          </div>
+          <div class="field">
+            <label>Confirm New Password</label>
+            <input type="password" id="resetConfirm" placeholder="Re-enter new password"/>
+          </div>
+        </div>
+        <button class="btn btn-primary" id="resetBtn" onclick="resetPassword()">Reset Password</button>
+        <div class="resp" id="resetResp"></div>
       </div>
 
       <!-- EMAIL VERIFICATION BOX -->
@@ -352,13 +387,70 @@ function showSignup() {
   document.getElementById('loginForm').style.display = 'none';
   document.getElementById('signupForm').style.display = 'block';
   document.getElementById('verifyBox').style.display = 'none';
+  document.getElementById('forgotBox').style.display = 'none';
+  document.getElementById('resetBox').style.display = 'none';
   resp('loginResp','','');
 }
 function showLogin() {
   document.getElementById('loginForm').style.display = 'block';
   document.getElementById('signupForm').style.display = 'none';
   document.getElementById('verifyBox').style.display = 'none';
+  document.getElementById('forgotBox').style.display = 'none';
+  document.getElementById('resetBox').style.display = 'none';
   resp('loginResp','','');
+}
+function showForgot() {
+  document.getElementById('loginForm').style.display = 'none';
+  document.getElementById('signupForm').style.display = 'none';
+  document.getElementById('verifyBox').style.display = 'none';
+  document.getElementById('forgotBox').style.display = 'block';
+  document.getElementById('resetBox').style.display = 'none';
+  resp('forgotResp','','');
+}
+async function forgotPassword() {
+  const email = document.getElementById('forgotEmail').value.trim();
+  if (!email) { resp('forgotResp','⚠ Please enter your email.','warn'); return; }
+  const btn = document.getElementById('forgotBtn');
+  btn.innerHTML = '<span class="spin"></span>Sending...'; btn.disabled = true;
+  try {
+    await cognitoCall('AWSCognitoIdentityProviderService.ForgotPassword', {
+      Username: email
+    });
+    S.email = email;
+    document.getElementById('forgotBox').style.display = 'none';
+    document.getElementById('resetBox').style.display = 'block';
+    resp('forgotResp','','');
+    setStatus('Check your email for a reset code','warn');
+  } catch(e) {
+    resp('forgotResp','❌ Error: '+(e.message||JSON.stringify(e)),'err');
+  }
+  btn.innerHTML = 'Send Reset Code'; btn.disabled = false;
+}
+async function resetPassword() {
+  const code    = document.getElementById('resetCode').value.trim();
+  const pwd     = document.getElementById('resetPwd').value;
+  const confirm = document.getElementById('resetConfirm').value;
+  if (!code)          { resp('resetResp','⚠ Enter the reset code.','warn'); return; }
+  if (!pwd)           { resp('resetResp','⚠ Enter a new password.','warn'); return; }
+  if (pwd !== confirm){ resp('resetResp','⚠ Passwords do not match.','warn'); return; }
+  if (pwd.length < 8) { resp('resetResp','⚠ Password must be at least 8 characters.','warn'); return; }
+  const btn = document.getElementById('resetBtn');
+  btn.innerHTML = '<span class="spin"></span>Resetting...'; btn.disabled = true;
+  try {
+    await cognitoCall('AWSCognitoIdentityProviderService.ConfirmForgotPassword', {
+      Username:         S.email,
+      ConfirmationCode: code,
+      Password:         pwd
+    });
+    document.getElementById('resetBox').style.display = 'none';
+    showLogin();
+    document.getElementById('email').value = S.email;
+    resp('loginResp','✅ Password reset! You can now log in with your new password.','ok');
+    setStatus('Password reset — login below','on');
+  } catch(e) {
+    resp('resetResp','❌ Reset failed: '+(e.message||JSON.stringify(e)),'err');
+  }
+  btn.innerHTML = 'Reset Password'; btn.disabled = false;
 }
 async function signUp() {
   const email   = document.getElementById('signupEmail').value.trim();
