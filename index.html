@@ -4,7 +4,7 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>FoxShare — Secure File Vault</title>
-<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" crossorigin="anonymous"/>
 <style>
 :root {
   --bg: #04080f; --surface: #080f1a; --surface2: #0c1524;
@@ -804,7 +804,7 @@ dz.addEventListener('drop',e=>{
 </script>
 
 <!-- QR Code library loaded ONCE, at the bottom -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 <script>
   new QRCode(document.getElementById("qrcode"), {
     text: "https://regal-griffin-ef6dde.netlify.app/",
