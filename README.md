@@ -1,6 +1,6 @@
 # 🦊 FoxShare — Secure File Vault
 
-A secure, encrypted file sharing web app built on AWS. Upload, download, share and delete files with full KMS encryption, Cognito authentication, MFA protection and self-service sign up.
+A secure, encrypted file sharing web app built on AWS. Upload, download, share and delete files with full KMS encryption, Cognito authentication, MFA protection, self-service sign up and forgot password.
 
 ---
 
@@ -12,13 +12,15 @@ A secure, encrypted file sharing web app built on AWS. Upload, download, share a
 
 ## ✨ Features
 
-- 🔐 **Cognito Authentication** — email and password login with MFA
-- 📝 **Self-Service Sign Up** — users can register themselves with email verification
+- 🔐 **Cognito Authentication** — email and password login with MFA (TOTP)
+- 📝 **Self-Service Sign Up** — users register themselves with email verification
+- 🔑 **Forgot Password** — Cognito sends a reset code by email automatically
 - 🔒 **KMS Encryption** — all files encrypted at rest in S3
 - 📁 **File Management** — upload, download, share and delete
-- 🔗 **Short Share Links** — automatic TinyURL generation for shared files
-- 🛡️ **Hidden Credentials** — AWS credentials stored server-side via Vercel Functions, never exposed in HTML
-- 📱 **QR Code Access** — scan to open on mobile
+- 🔗 **Short Share Links** — automatic TinyURL generation for shared files (expires 24hrs)
+- 🛡️ **Hidden Credentials** — AWS credentials stored server-side via Vercel Functions, never exposed in HTML source
+- 📱 **Mobile Friendly** — responsive layout with large readable fonts
+- 📷 **QR Code Access** — scan to open on mobile
 
 ---
 
@@ -27,41 +29,40 @@ A secure, encrypted file sharing web app built on AWS. Upload, download, share a
 ```
 Browser
    │
-   ├── /api/cognito  →  Vercel Function  →  AWS Cognito (login, sign up, MFA)
+   ├── /api/cognito  →  Vercel Function  →  AWS Cognito (sign up, login, MFA, forgot password)
    │
-   └── /api/files    →  Vercel Function  →  AWS API Gateway  →  Lambda  →  S3
+   └── /api/files    →  Vercel Function  →  AWS API Gateway  →  Lambda  →  S3 (KMS encrypted)
 ```
 
-### AWS Services Used
+### AWS Services
 
 | Service | Purpose |
 |---|---|
-| Cognito | User authentication, self-registration and MFA |
-| API Gateway | REST API endpoint |
-| Lambda | Backend file operations |
-| S3 | Encrypted file storage |
+| Cognito | User auth, self-registration, MFA, password reset |
+| API Gateway | REST API with Cognito JWT authorizer |
+| Lambda | Upload, download, list, delete, share functions |
+| S3 | Encrypted file storage per user |
 | KMS | File encryption at rest |
 
 ---
 
-## 👤 User Sign Up Flow
+## 👤 User Flows
 
+### Sign Up
 ```
-User clicks "Sign Up"
-       ↓
-Enters email + password
-       ↓
-Cognito sends 6-digit verification code by email
-       ↓
-User enters code → email verified
-       ↓
-User logs in → prompted to set up MFA
-       ↓
-Scans QR code with Google Authenticator or Authy
-       ↓
-Enters 6-digit code → MFA confirmed
-       ↓
-Full access to private file vault
+Click "Sign Up" → Enter email + password → Cognito sends verification code
+→ Enter code → Email verified → Login → MFA setup → Full access
+```
+
+### Login
+```
+Enter email + password → Enter MFA code from authenticator app → Logged in
+```
+
+### Forgot Password
+```
+Click "Forgot Password?" → Enter email → Cognito sends reset code
+→ Enter code + new password → Password reset → Login
 ```
 
 ---
@@ -70,12 +71,12 @@ Full access to private file vault
 
 ```
 foxshare/
-├── index.html              ← Frontend — no credentials
-├── package.json            ← Node.js version config
+├── index.html              ← Frontend — no AWS credentials
+├── package.json            ← Node.js version (24.x)
 ├── vercel.json             ← Vercel function settings
 └── api/
-    ├── cognito.js          ← Cognito proxy function
-    └── files.js            ← Files proxy function
+    ├── cognito.js          ← Cognito proxy — injects POOL_ID + CLIENT_ID server-side
+    └── files.js            ← Files proxy — injects API_URL server-side
 ```
 
 ---
@@ -83,36 +84,37 @@ foxshare/
 ## 🚀 Deployment
 
 ### Prerequisites
-- AWS account with Cognito, API Gateway, Lambda and S3 configured
-- Cognito User Pool with **self-registration enabled**
+- AWS account with Cognito, API Gateway, Lambda, S3 and KMS configured
+- Cognito User Pool with self-registration enabled and MFA required
+- Cognito App Client with no client secret and `ALLOW_USER_PASSWORD_AUTH` enabled
 - GitHub account
 - Vercel account (free tier)
 
 ### Step 1 — Upload to GitHub
-Upload all files to a GitHub repository including the `api` folder.
+1. Create a repository named `foxshare`
+2. Upload all files including the `api` folder
 
-### Step 2 — Import to Vercel
-1. Go to [vercel.com](https://vercel.com)
-2. Click **Add New → Project**
-3. Import your GitHub repository
+### Step 2 — Create Vercel Project
+1. Go to [vercel.com](https://vercel.com) → **Add New → Project**
+2. Import your `foxshare` GitHub repository
 
 ### Step 3 — Add Environment Variables
-Add these **before** deploying:
+> ⚠️ Add these BEFORE clicking Deploy
 
-| Key | Description |
+| Key | Where to find it |
 |---|---|
-| `API_URL` | Your API Gateway Invoke URL |
-| `POOL_ID` | Your Cognito User Pool ID |
-| `CLIENT_ID` | Your Cognito App Client ID |
+| `API_URL` | API Gateway → Stages → Prod → Invoke URL |
+| `POOL_ID` | Cognito → User Pools → your pool → Pool ID |
+| `CLIENT_ID` | Cognito → App clients → Client ID |
 
 ### Step 4 — Deploy
-Click **Deploy** and wait 30–60 seconds.
+Click **Deploy** — your live URL will be ready in 30–60 seconds.
 
 ---
 
 ## 💻 Local Development
 
-For local testing use `index-local.html` with a Python HTTP server.
+Use `index-local.html` with a Python HTTP server for local testing.
 
 > ⚠️ Never commit `index-local.html` to GitHub — it contains hardcoded credentials.
 
@@ -121,35 +123,42 @@ cd Downloads
 python -m http.server 3000
 ```
 
-Open `http://localhost:3000/index-local.html`
+Open: `http://localhost:3000/index-local.html`
+
+| File | Use for | Credentials |
+|---|---|---|
+| `index.html` | Vercel deployment | ❌ None |
+| `index-local.html` | Local testing only | ✅ Hardcoded |
 
 ---
 
 ## 🔒 Security
 
-- AWS credentials stored as Vercel environment variables — never in the HTML
-- All Cognito calls proxied through Vercel — `CLIENT_ID` and `POOL_ID` never exposed to browser
-- Files stored under each user's email path in S3: `users/{email}/{file-id}/{filename}`
+- AWS credentials never appear in HTML source — stored as Vercel environment variables
+- `CLIENT_ID` and `POOL_ID` injected server-side by Vercel proxy
+- Files stored per user: `users/{email}/{file-id}/{filename}`
 - All S3 objects encrypted with AWS KMS
-- JWT tokens from Cognito validated on every API request
-- MFA enforced on all user accounts via TOTP
+- JWT tokens validated on every Lambda request
+- MFA enforced on all accounts via TOTP (Google Authenticator / Authy)
 - Cross-user file access blocked in all Lambda functions
+- S3 bucket is fully private — no public access
 
 ---
 
 ## 🛠️ Troubleshooting
 
-| Problem | Fix |
-|---|---|
-| `region is not defined` | Re-add environment variables in Vercel → Settings → Environment Variables, then redeploy |
-| `Value null at clientId` | Check `CLIENT_ID` env var is set in Vercel and redeploy. Ensure `index.html` is the Vercel version not the local version |
-| `Share failed: Missing env var` | Re-add all three env vars in Vercel and redeploy |
-| Login fails after deploy | Go to Vercel → Logs to see the exact error |
-| Sign up not working | Enable self-registration in Cognito → User Pool → Sign-up experience |
-| Page not found | Ensure `index.html` is at the root of the repo not inside a subfolder |
-| api folder missing on GitHub | Go to GitHub → Add file → Upload files and drag the api folder directly |
-| MFA code rejected | Wait for the next 30-second cycle and try a fresh code |
-| Changes not showing | Wait 30–60 seconds after committing to GitHub for Vercel to redeploy |
+| Error | Cause | Fix |
+|---|---|---|
+| `Value null at clientId` | Wrong `index.html` version or missing `CLIENT_ID` env var | Ensure `index.html` has no hardcoded credentials. Re-add `CLIENT_ID` in Vercel and redeploy |
+| `region is not defined` | `POOL_ID` env var missing | Add `POOL_ID` in Vercel → Settings → Environment Variables and redeploy |
+| `Share failed: Missing env var` | `API_URL` not set | Add `API_URL` in Vercel and redeploy |
+| `Sign up failed` | Self-registration disabled | Cognito → User Pool → Sign-up experience → Enable self-registration |
+| Login fails | Various | Check Vercel → Logs for exact error |
+| Page not found | `index.html` not at repo root | Ensure `index.html` is at root, not inside a subfolder |
+| `api` folder missing | Upload issue | Drag the `api` folder directly into GitHub upload area |
+| MFA code rejected | Code expired | Wait 30s for next cycle and try again |
+| Env vars disappeared | Project deleted and recreated | Re-add all three env vars — they wipe when a project is deleted |
+| Changes not live | Vercel still redeploying | Wait 30–60s after committing to GitHub |
 
 ---
 
