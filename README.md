@@ -147,18 +147,6 @@ Click **Deploy** — your live URL will be ready in 30–60 seconds.
 
 ---
 
-## 💻 Local Development
-
-Use `index-local.html` with a Python HTTP server for local testing.
-
-> ⚠️ Never commit `index-local.html` to GitHub — it contains hardcoded credentials.
-
-```bash
-cd Downloads
-python -m http.server 3000
-```
-
-Open: `http://localhost:3000/index-local.html`
 
 | File | Use for | Credentials |
 |---|---|---|
