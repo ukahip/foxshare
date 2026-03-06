@@ -1,10 +1,22 @@
+const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN || 'https://foxshare.vercel.app';
+
 module.exports = async function (req, res) {
-  res.setHeader("Access-Control-Allow-Origin", "*");
+  const origin = req.headers.origin || '';
+  const allowedOrigin = origin === ALLOWED_ORIGIN ? origin : ALLOWED_ORIGIN;
+
+  res.setHeader("Access-Control-Allow-Origin",  allowedOrigin);
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+  res.setHeader("Vary", "Origin");
 
   if (req.method === "OPTIONS") {
     res.status(200).end();
+    return;
+  }
+
+  // Block requests from unexpected origins
+  if (origin && origin !== ALLOWED_ORIGIN) {
+    res.status(403).json({ error: "Origin not allowed" });
     return;
   }
 
@@ -21,6 +33,11 @@ module.exports = async function (req, res) {
   var parsed = req.body;
   if (typeof parsed === "string") {
     try { parsed = JSON.parse(parsed); } catch(e) {}
+  }
+
+  if (!parsed || !parsed.target) {
+    res.status(400).json({ error: "Missing target in request body" });
+    return;
   }
 
   var target    = parsed.target;
